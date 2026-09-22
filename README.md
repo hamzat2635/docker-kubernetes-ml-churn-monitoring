@@ -1,7 +1,8 @@
 # Docker & Kubernetes ML Churn Monitoring
 
-A cloud-native machine learning application for customer churn prediction,
-built with FastAPI, PostgreSQL, Docker and Kubernetes.
+A cloud-native machine learning application for customer churn prediction, built with FastAPI, PostgreSQL, Docker, and Kubernetes.
+
+The project demonstrates a microservice architecture with REST API communication, persistent database storage, independent horizontal scaling, service discovery, and Kubernetes self-healing.
 
 ## Highlights
 
@@ -17,7 +18,6 @@ built with FastAPI, PostgreSQL, Docker and Kubernetes.
 - Persistent data across PostgreSQL Pod replacement
 - Browser-based monitoring dashboard
 
-
 ## Documentation
 
 - [Architecture and Software Design](docs/architecture.md)
@@ -25,50 +25,15 @@ built with FastAPI, PostgreSQL, Docker and Kubernetes.
 - [Deployment Guide](docs/deployment-guide.md)
 - [Demo Guide](docs/demo-guide.md)
 
-
-
-# Cloud-Native Customer Churn Prediction & Monitoring
-
-A cloud-native machine learning application that predicts customer churn using a trained Logistic Regression model.
-
-The project uses a microservice architecture with FastAPI, PostgreSQL, Docker, and Kubernetes. It demonstrates REST API communication, persistent database storage, horizontal scaling, and Kubernetes self-healing.
-
 ## Project Overview
 
-The application allows a user to enter customer information through a web dashboard.
+The application allows a user to enter telecom customer information through a web dashboard.
 
-The Monitoring Service sends the customer data to the ML Inference Service through a REST API.
+The Monitoring Service receives the request, sends the customer data to the ML Inference Service through a REST API, receives the churn prediction, stores the result in PostgreSQL, and returns it to the browser.
 
-The Inference Service uses a trained Logistic Regression model to predict whether the customer is likely to churn.
-
-The prediction and customer information are then stored in PostgreSQL and can be viewed through the prediction history section of the dashboard.
+The Inference Service uses a trained Logistic Regression pipeline to predict whether the customer is likely to churn and returns a churn probability.
 
 ## Architecture
-
-```text
-Browser
-   |
-   v
-Monitoring Service
-   |
-   | REST API
-   v
-Inference Service
-   |
-   v
-Logistic Regression Model
-
-Monitoring Service
-   |
-   | SQL
-   v
-PostgreSQL
-   |
-   v
-Persistent Storage
-```
-
-When deployed with Kubernetes:
 
 ```text
 Browser
@@ -79,35 +44,27 @@ NodePort :30081
    v
 Monitoring Service
    |
-   +----> Monitoring Pods
+   +------ REST ------> Inference Service
+   |                        |
+   |                        v
+   |                 Logistic Regression
    |
-   | REST
-   v
-Inference Service
-   |
-   +----> Inference Pods
-   |
-   v
-Logistic Regression Model
-
-Monitoring Pods
-   |
-   | SQL
-   v
-PostgreSQL Service
-   |
-   v
-PostgreSQL Pod
-   |
-   v
-PersistentVolumeClaim
+   +------ SQL -------> PostgreSQL Service
+                            |
+                            v
+                       PostgreSQL Pod
+                            |
+                            v
+                    PersistentVolumeClaim
 ```
+
+For the full design and component responsibilities, see [docs/architecture.md](docs/architecture.md).
 
 ## Microservices
 
-### 1. Inference Service
+### Inference Service
 
-The Inference Service is responsible for machine learning predictions.
+Responsible for machine learning inference.
 
 Technology:
 
@@ -124,7 +81,7 @@ GET  /health
 POST /predict
 ```
 
-Example prediction response:
+Example response:
 
 ```json
 {
@@ -133,9 +90,9 @@ Example prediction response:
 }
 ```
 
-### 2. Monitoring Service
+### Monitoring Service
 
-The Monitoring Service provides the web dashboard and communicates with both the Inference Service and PostgreSQL.
+Provides the web dashboard and coordinates communication between the browser, Inference Service, and PostgreSQL.
 
 Technology:
 
@@ -157,7 +114,7 @@ GET  /predictions
 
 The `/analyze` endpoint programmatically consumes the `/predict` REST API provided by the Inference Service.
 
-### 3. PostgreSQL
+### PostgreSQL
 
 PostgreSQL stores:
 
@@ -166,7 +123,7 @@ PostgreSQL stores:
 - Churn probability
 - Prediction timestamp
 
-Persistent storage is provided in Kubernetes using a PersistentVolumeClaim.
+Persistent storage is provided through a Kubernetes PersistentVolumeClaim.
 
 ## Machine Learning Model
 
@@ -191,7 +148,7 @@ Final Logistic Regression results:
 
 Logistic Regression was selected because it achieved higher recall, F1 score, and ROC-AUC in the evaluated configuration.
 
-The deployed model accepts these features:
+The deployed model accepts:
 
 - tenure
 - InternetService
@@ -203,30 +160,24 @@ The deployed model accepts these features:
 - PaperlessBilling
 - PaymentMethod
 
-## Docker
+## Docker Images
 
-The two custom microservices are containerized separately.
-
-Docker images:
+Custom images:
 
 ```text
 hamza2635/churn-inference:1.0
 hamza2635/churn-monitoring:1.1
 ```
 
-PostgreSQL uses the official:
+Database image:
 
 ```text
 postgres:16
 ```
 
-image.
-
 ## Kubernetes
 
-The application is deployed using Kubernetes.
-
-Kubernetes resources include:
+The repository contains Kubernetes configuration for:
 
 ```text
 Inference Deployment
@@ -240,10 +191,10 @@ PostgreSQL Service
 PostgreSQL PersistentVolumeClaim
 
 ConfigMap
-Secret
+Secret template
 ```
 
-The Monitoring Service is externally accessible using a NodePort:
+The dashboard is externally accessible through:
 
 ```text
 http://localhost:30081/
@@ -251,16 +202,14 @@ http://localhost:30081/
 
 ## Horizontal Scaling
 
-The application microservices can be scaled independently.
-
-Example:
+The application services can be scaled independently:
 
 ```bash
 kubectl scale deployment inference --replicas=3
 kubectl scale deployment monitoring --replicas=2
 ```
 
-The tested deployment used:
+A tested demonstration configuration used:
 
 ```text
 Inference:   3 replicas
@@ -268,64 +217,56 @@ Monitoring:  2 replicas
 PostgreSQL:  1 replica
 ```
 
-## Self-Healing
+The application is small enough that multiple replicas are not required for its current traffic. Scaling is demonstrated to show how the architecture could support a larger workload.
 
-Kubernetes self-healing was tested by manually deleting an Inference Pod.
+## Self-Healing and Persistence
 
-Kubernetes automatically created a replacement Pod while the remaining replicas continued serving requests.
+Kubernetes self-healing was tested by deleting an Inference Pod. Kubernetes automatically created a replacement Pod while the Deployment maintained its desired replica count.
 
-The PostgreSQL Pod was also deleted during testing. Kubernetes recreated the Pod automatically.
+PostgreSQL persistence was tested by:
 
-## Persistent Storage
+1. Creating prediction records.
+2. Deleting the PostgreSQL Pod.
+3. Allowing Kubernetes to create a replacement Pod.
+4. Confirming that the previously stored records were still available.
 
-PostgreSQL uses a Kubernetes PersistentVolumeClaim:
+PostgreSQL uses:
 
 ```text
 postgres-pvc
 ```
 
-Database persistence was verified by:
+## Configuration and Security
 
-1. Creating prediction records.
-2. Deleting the PostgreSQL Pod.
-3. Allowing Kubernetes to create a replacement Pod.
-4. Confirming that the previously stored predictions were still available.
-
-## Configuration
-
-Non-sensitive configuration is provided through a Kubernetes ConfigMap.
-
-Examples:
-
-```text
-INFERENCE_SERVICE_URL
-DB_HOST
-DB_PORT
-DB_NAME
-```
+Non-sensitive runtime configuration is provided through a Kubernetes ConfigMap.
 
 Database credentials are provided through a Kubernetes Secret.
 
-The real Secret file is excluded from Git.
-
-Use:
-
-```text
-kubernetes/postgres-secret.example.yaml
-```
-
-as a template and create your own:
+The real:
 
 ```text
 kubernetes/postgres-secret.yaml
 ```
 
-before deploying.
+is excluded from Git. The repository contains:
+
+```text
+kubernetes/postgres-secret.example.yaml
+```
+
+as a safe template.
+
+For a fuller security discussion, see [docs/design-discussion.md](docs/design-discussion.md).
 
 ## Project Structure
 
 ```text
-Cloud ML/
+.
+|-- docs/
+|   |-- architecture.md
+|   |-- design-discussion.md
+|   |-- deployment-guide.md
+|   `-- demo-guide.md
 |
 |-- inference-service/
 |   |-- model/
@@ -362,19 +303,17 @@ Cloud ML/
 `-- README.md
 ```
 
-## Running the Kubernetes Application
+## Quick Start
 
-Check the Kubernetes cluster:
+For complete instructions, see the [Deployment Guide](docs/deployment-guide.md).
+
+Check the cluster:
 
 ```bash
 kubectl get nodes
 ```
 
-Create the database Secret using the example file first.
-
-Then deploy the Kubernetes resources.
-
-Check the application:
+After creating the local database Secret and applying the Kubernetes resources, verify:
 
 ```bash
 kubectl get deployments
@@ -383,49 +322,26 @@ kubectl get services
 kubectl get pvc
 ```
 
-When all Pods are running, open:
+Then open:
 
 ```text
 http://localhost:30081/
 ```
 
-## Features Demonstrated
+## Assignment Requirements Covered
 
-This project demonstrates:
-
-- Microservice architecture
-- REST API implementation
-- Programmatic REST API consumption
-- Machine learning inference
-- Docker containerization
-- Docker Hub image distribution
-- Kubernetes Deployments
-- Kubernetes Services
-- ConfigMaps
-- Secrets
-- PersistentVolumeClaims
-- Horizontal scaling
-- Independent microservice scaling
-- Kubernetes self-healing
-- Persistent PostgreSQL storage
-- Browser-accessible web dashboard
-
-## Security Considerations
-
-Database credentials are stored using Kubernetes Secrets rather than being hard-coded into the Deployment manifests.
-
-Sensitive Secret files are excluded from Git using `.gitignore`.
-
-For a production deployment, additional measures would include:
-
-- TLS/HTTPS
-- Authentication and authorization
-- NetworkPolicies
-- Restricted database access
-- Secret encryption at rest
-- Resource limits
-- Input validation
-- Regular dependency updates
+| Requirement | Implementation |
+|---|---|
+| Kubernetes deployment | Kubernetes manifests included |
+| At least two microservice types | Monitoring and Inference |
+| REST API on each microservice | FastAPI endpoints on both services |
+| External access | Monitoring NodePort on port 30081 |
+| Independent horizontal scaling | Separate Monitoring and Inference Deployments |
+| Images available to Kubernetes | Custom images published on Docker Hub |
+| Separate database | PostgreSQL Deployment and Service |
+| Persistent database storage | PostgreSQL PVC |
+| Database scaling not required | PostgreSQL uses one replica |
+| Programmatic REST API consumption | Monitoring calls Inference with an HTTP POST request |
 
 ## Author
 
