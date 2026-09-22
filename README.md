@@ -1,3 +1,32 @@
+# Docker & Kubernetes ML Churn Monitoring
+
+A cloud-native machine learning application for customer churn prediction,
+built with FastAPI, PostgreSQL, Docker and Kubernetes.
+
+## Highlights
+
+- Two independently scalable FastAPI microservices
+- Programmatic REST API communication
+- Logistic Regression churn prediction
+- PostgreSQL persistent storage
+- Dockerized services published to Docker Hub
+- Kubernetes Deployments and Services
+- ConfigMap and Secret configuration
+- Horizontal scaling
+- Kubernetes self-healing
+- Persistent data across PostgreSQL Pod replacement
+- Browser-based monitoring dashboard
+
+
+## Documentation
+
+- [Architecture and Software Design](docs/architecture.md)
+- [Benefits, Challenges and Security](docs/design-discussion.md)
+- [Deployment Guide](docs/deployment-guide.md)
+- [Demo Guide](docs/demo-guide.md)
+
+
+
 # Cloud-Native Customer Churn Prediction & Monitoring
 
 A cloud-native machine learning application that predicts customer churn using a trained Logistic Regression model.
