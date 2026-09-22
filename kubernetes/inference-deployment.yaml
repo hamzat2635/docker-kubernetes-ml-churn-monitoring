@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: inference
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: inference
+
+  template:
+    metadata:
+      labels:
+        app: inference
+
+    spec:
+      containers:
+        - name: inference
+          image: hamza2635/churn-inference:1.0
+
+          ports:
+            - containerPort: 8000
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20

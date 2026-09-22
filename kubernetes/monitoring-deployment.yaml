@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: monitoring
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: monitoring
+
+  template:
+    metadata:
+      labels:
+        app: monitoring
+
+    spec:
+      containers:
+        - name: monitoring
+
+          image: hamza2635/churn-monitoring:1.1
+
+          ports:
+            - containerPort: 8001
+
+          env:
+            - name: INFERENCE_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: monitoring-config
+                  key: INFERENCE_SERVICE_URL
+
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: monitoring-config
+                  key: DB_HOST
+
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: monitoring-config
+                  key: DB_PORT
+
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: monitoring-config
+                  key: DB_NAME
+
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 20

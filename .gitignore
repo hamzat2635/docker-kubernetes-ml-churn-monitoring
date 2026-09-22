@@ -1,0 +1,33 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE files
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.env
+kubernetes/postgres-secret.yaml
+
+# Temporary files
+*.log
+*.tmp
+
+# Local test scripts
+inference-service/test_model.py
+monitoring-service/test_database.py
+
+# Dataset
+WA_Fn-UseC_-Telco-Customer-Churn.csv
