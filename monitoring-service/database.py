@@ -1,8 +1,8 @@
-import psycopg
 import os
+import psycopg
 
 
-# Database settings
+# These values are replaced by environment variables in Kubernetes
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = int(os.getenv("DB_PORT", "5432"))
 DB_NAME = os.getenv("DB_NAME", "churndb")
@@ -10,10 +10,8 @@ DB_USER = os.getenv("DB_USER", "clouduser")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "cloudpass")
 
 
-# Connect to PostgreSQL
 def get_connection():
-
-    connection = psycopg.connect(
+    return psycopg.connect(
         host=DB_HOST,
         port=DB_PORT,
         dbname=DB_NAME,
@@ -22,14 +20,9 @@ def get_connection():
         connect_timeout=5
     )
 
-    return connection
 
-
-# Create predictions table
 def create_table():
-
     connection = get_connection()
-
     cursor = connection.cursor()
 
     cursor.execute(
@@ -53,16 +46,12 @@ def create_table():
     )
 
     connection.commit()
-
     cursor.close()
     connection.close()
 
 
-# Save prediction and customer information
 def save_prediction(customer, prediction, churn_probability):
-
     connection = get_connection()
-
     cursor = connection.cursor()
 
     cursor.execute(
@@ -101,16 +90,12 @@ def save_prediction(customer, prediction, churn_probability):
     )
 
     connection.commit()
-
     cursor.close()
     connection.close()
 
 
-# Get all saved predictions
 def get_predictions():
-
     connection = get_connection()
-
     cursor = connection.cursor()
 
     cursor.execute(
@@ -139,11 +124,9 @@ def get_predictions():
     cursor.close()
     connection.close()
 
-
     predictions = []
 
     for row in rows:
-
         predictions.append(
             {
                 "id": row[0],
