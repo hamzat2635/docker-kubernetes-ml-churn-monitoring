@@ -1,19 +1,10 @@
 # Demo Guide
 
-This guide is designed for the required 5-10 minute project video.
+This is the order I plan to use for the 5 to 10 minute assignment video.
 
 ## Before Recording
 
-Make sure Kubernetes is running and the application is deployed.
-
-A useful test configuration is:
-
-```bash
-kubectl scale deployment inference --replicas=3
-kubectl scale deployment monitoring --replicas=2
-```
-
-Check:
+Check that Kubernetes is running:
 
 ```bash
 kubectl get deployments
@@ -22,22 +13,32 @@ kubectl get services
 kubectl get pvc
 ```
 
-Also confirm that the dashboard opens at:
+For the scaling part, I can use:
+
+```bash
+kubectl scale deployment inference --replicas=3
+kubectl scale deployment monitoring --replicas=2
+```
+
+The dashboard should open at:
 
 ```text
 http://localhost:30081/
 ```
 
-## 1. Introduction - about 45 seconds
+## 1. Introduction
 
-Explain:
+I will explain that the project predicts customer churn.
 
-- The project predicts telecom customer churn.
-- It uses a trained Logistic Regression model.
-- It is built as a microservice application.
-- It uses FastAPI, PostgreSQL, Docker, and Kubernetes.
+It uses:
 
-Mention the three main runtime components:
+- FastAPI
+- Logistic Regression
+- PostgreSQL
+- Docker
+- Kubernetes
+
+The main parts are:
 
 ```text
 Monitoring Service
@@ -45,11 +46,9 @@ Inference Service
 PostgreSQL
 ```
 
-## 2. Architecture - about 60 seconds
+## 2. Architecture
 
-Show the architecture documentation or README.
-
-Explain the request flow:
+I will show this flow:
 
 ```text
 Browser
@@ -57,7 +56,6 @@ Browser
    v
 Monitoring Service
    |
-   | REST API
    v
 Inference Service
    |
@@ -66,22 +64,13 @@ Logistic Regression
 
 Monitoring Service
    |
-   | SQL
    v
 PostgreSQL
-   |
-   v
-PersistentVolumeClaim
 ```
 
-Important points to mention:
+I will explain that the Monitoring Service calls the Inference Service through REST and stores the result in PostgreSQL.
 
-- Monitoring provides the UI and coordinates requests.
-- Inference performs only ML prediction.
-- PostgreSQL stores prediction history.
-- Monitoring programmatically consumes the Inference REST API.
-
-## 3. Kubernetes Resources - about 60 seconds
+## 3. Kubernetes Resources
 
 Run:
 
@@ -92,16 +81,16 @@ kubectl get services
 kubectl get pvc
 ```
 
-Explain:
+I will explain:
 
-- Monitoring and Inference are separate Deployments.
-- Their replica counts can be changed independently.
-- PostgreSQL remains at one replica.
-- `monitoring-service` is a NodePort.
-- `inference-service` and `postgres-service` are internal.
-- `postgres-pvc` provides persistent database storage.
+- Monitoring and Inference are separate Deployments
+- they can scale separately
+- PostgreSQL has one replica
+- Monitoring uses NodePort
+- Inference and PostgreSQL stay internal
+- PostgreSQL uses a PVC
 
-## 4. User Interface and Prediction - about 60-90 seconds
+## 4. Show the Dashboard
 
 Open:
 
@@ -111,20 +100,20 @@ http://localhost:30081/
 
 Enter a customer and click **Predict Churn**.
 
-Explain what happens:
+Then click **Load Prediction History**.
 
-1. Browser sends data to `POST /analyze`.
-2. Monitoring sends the same customer data to Inference `POST /predict`.
-3. Inference runs the Logistic Regression pipeline.
-4. Inference returns a prediction and probability.
-5. Monitoring stores the result in PostgreSQL.
-6. Monitoring returns the result to the browser.
+I will explain the request flow:
 
-Then click **Load Prediction History** to show stored database records.
+1. browser sends data to Monitoring
+2. Monitoring calls Inference
+3. Inference runs the model
+4. Inference returns prediction and probability
+5. Monitoring saves the result in PostgreSQL
+6. Monitoring shows the result in the browser
 
-## 5. REST API - about 45 seconds
+## 5. Show the REST APIs
 
-Open the Monitoring FastAPI documentation:
+Open:
 
 ```text
 http://localhost:30081/docs
@@ -139,9 +128,7 @@ POST /analyze
 GET  /predictions
 ```
 
-Explain that `POST /analyze` uses Python `requests.post()` to programmatically consume the Inference REST API.
-
-If you want to show the Inference API documentation, run:
+For the Inference API:
 
 ```bash
 kubectl port-forward service/inference-service 8000:8000
@@ -160,33 +147,26 @@ GET  /health
 POST /predict
 ```
 
-## 6. Logs - about 30 seconds
+## 6. Show Logs
 
-Show application logs as required by the assignment:
+Run:
 
 ```bash
 kubectl logs deployment/monitoring --tail=20
 kubectl logs deployment/inference --tail=20
 ```
 
-Explain that the logs show HTTP requests handled by the FastAPI/Uvicorn services.
+I will explain that these logs show requests handled by the services.
 
-If multiple Pods are running and you want one specific Pod:
+## 7. Show Scaling
 
-```bash
-kubectl get pods
-kubectl logs <pod-name> --tail=20
-```
-
-## 7. Scaling and Self-Healing - about 60 seconds
-
-Show:
+Run:
 
 ```bash
 kubectl get deployments
 ```
 
-Explain that a tested configuration uses:
+I will show:
 
 ```text
 Inference:   3 replicas
@@ -194,9 +174,11 @@ Monitoring:  2 replicas
 PostgreSQL:  1 replica
 ```
 
-The application itself is too small to need these replicas for real traffic. The purpose is to demonstrate how independent horizontal scaling would work under a larger workload.
+I will mention that the project is small and does not really need this scale. I am using it to show that the two application services can scale independently.
 
-For self-healing, list Inference Pods:
+## 8. Show Self-Healing
+
+List the Inference Pods:
 
 ```bash
 kubectl get pods -l app=inference
@@ -208,15 +190,15 @@ Delete one:
 kubectl delete pod <inference-pod-name>
 ```
 
-Then:
+Then check again:
 
 ```bash
 kubectl get pods -l app=inference
 ```
 
-Explain that Kubernetes creates a replacement because the Deployment maintains the desired replica count.
+I will explain that Kubernetes creates a replacement Pod automatically.
 
-## 8. Persistence - about 45 seconds
+## 9. Explain Persistence
 
 Show:
 
@@ -224,112 +206,50 @@ Show:
 kubectl get pvc
 ```
 
-Explain the test already performed:
+I will explain the test:
 
-1. Prediction records were stored.
-2. The PostgreSQL Pod was deleted.
-3. Kubernetes created a replacement PostgreSQL Pod.
-4. The old prediction records were still available.
+1. I saved prediction records
+2. I deleted the PostgreSQL Pod
+3. Kubernetes created a new PostgreSQL Pod
+4. the old prediction records were still available
 
-This demonstrates persistence across Pod replacement.
+## 10. Show the YAML Files
 
-If time allows, perform the deletion during the recording:
-
-```bash
-kubectl delete pod -l app=postgres
-kubectl get pods -l app=postgres
-```
-
-Then reload prediction history.
-
-## 9. Kubernetes YAML Walkthrough - about 60-90 seconds
-
-Open the `kubernetes/` folder.
-
-Briefly show:
-
-### inference-deployment.yaml
-
-Point out:
-
-- Docker Hub image
-- container port
-- readiness probe
-- liveness probe
-- replicas
-
-### inference-service.yaml
-
-Explain that it gives Inference a stable internal address.
-
-### monitoring-deployment.yaml
-
-Point out:
-
-- Docker Hub image
-- ConfigMap values
-- Secret values
-- health probes
-
-### monitoring-service.yaml
-
-Point out:
+I will briefly open these files:
 
 ```text
-type: NodePort
-nodePort: 30081
+inference-deployment.yaml
+inference-service.yaml
+monitoring-deployment.yaml
+monitoring-service.yaml
+monitoring-configmap.yaml
+postgres-deployment.yaml
+postgres-service.yaml
+postgres-pvc.yaml
+postgres-secret.example.yaml
 ```
 
-Explain that this makes the dashboard accessible from outside Kubernetes.
+I will point out:
 
-### postgres-deployment.yaml
+- Docker Hub image names
+- replica settings
+- container ports
+- health checks
+- ConfigMap values
+- Secret values
+- NodePort
+- PVC
 
-Point out:
+## 11. Security and Finish
 
-- `postgres:16`
-- Secret-based credentials
-- PVC volume mount
+I will mention:
 
-### postgres-pvc.yaml
+- database credentials use a Kubernetes Secret
+- the real Secret file is ignored by Git
+- PostgreSQL is internal
+- Inference is internal
+- only Monitoring is exposed outside Kubernetes
 
-Explain that it requests persistent storage.
+For production, I would also add HTTPS, authentication, NetworkPolicies, RBAC and better secret management.
 
-### monitoring-configmap.yaml
-
-Explain that non-sensitive runtime configuration is separated from application code.
-
-### postgres-secret.example.yaml
-
-Explain that the real Secret file is excluded from Git and only a safe example is committed.
-
-## 10. Security and Conclusion - about 45 seconds
-
-Mention current security decisions:
-
-- Database credentials are stored in a Kubernetes Secret.
-- The real Secret YAML is excluded from Git.
-- PostgreSQL is internal.
-- Inference is internal.
-- Only Monitoring is externally exposed.
-
-Mention production improvements:
-
-- HTTPS
-- Authentication and authorization
-- NetworkPolicies
-- RBAC
-- stronger secret management
-- container scanning
-- resource limits
-
-Finish by summarizing that the project demonstrates:
-
-- REST API creation
-- Programmatic REST API consumption
-- Docker containerization
-- Kubernetes deployment
-- Independent horizontal scaling
-- Service discovery
-- Self-healing
-- PostgreSQL persistence
-- Browser access
+I will finish by saying that the project shows REST APIs, Docker, Kubernetes, scaling, self-healing and persistent storage.
