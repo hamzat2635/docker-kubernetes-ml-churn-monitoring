@@ -1,24 +1,28 @@
 # Deployment Guide
 
-This guide deploys the project to the Kubernetes cluster included with Docker Desktop.
+This guide explains how I run the project with Docker Desktop Kubernetes.
 
-## Prerequisites
+## Requirements
 
-Install and enable:
+You need:
 
 - Docker Desktop
-- Docker Desktop Kubernetes
-- `kubectl`
+- Kubernetes enabled in Docker Desktop
+- kubectl
 - Git
 
-The custom application images are already available on Docker Hub:
+The application images are already on Docker Hub:
 
 ```text
 hamza2635/churn-inference:1.0
 hamza2635/churn-monitoring:1.1
 ```
 
-PostgreSQL uses the official `postgres:16` image.
+PostgreSQL uses:
+
+```text
+postgres:16
+```
 
 ## 1. Clone the Repository
 
@@ -40,11 +44,11 @@ With Docker Desktop, the context should normally be:
 docker-desktop
 ```
 
-The node should report `Ready`.
+The node should show `Ready`.
 
-## 3. Create the Local Database Secret
+## 3. Create the Database Secret
 
-The real secret is intentionally not committed to Git.
+The real Secret file is not stored in Git.
 
 Copy:
 
@@ -52,41 +56,21 @@ Copy:
 kubernetes/postgres-secret.example.yaml
 ```
 
-to:
+and create:
 
 ```text
 kubernetes/postgres-secret.yaml
 ```
 
-Then edit the local file and choose your database username and password.
+Add your own database username and password.
 
-Example structure:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: postgres-secret
-type: Opaque
-stringData:
-  POSTGRES_USER: your_database_user
-  POSTGRES_PASSWORD: your_database_password
-```
-
-Do not commit the real secret file.
+Do not commit this file.
 
 ## 4. Deploy PostgreSQL
-
-Apply the Secret and persistent storage first:
 
 ```bash
 kubectl apply -f kubernetes/postgres-secret.yaml
 kubectl apply -f kubernetes/postgres-pvc.yaml
-```
-
-Then deploy PostgreSQL and its Service:
-
-```bash
 kubectl apply -f kubernetes/postgres-deployment.yaml
 kubectl apply -f kubernetes/postgres-service.yaml
 ```
@@ -98,22 +82,13 @@ kubectl get pods
 kubectl get pvc
 ```
 
-The PVC should be `Bound`.
-
-> The included PVC uses Docker Desktop's `hostpath` StorageClass. On another Kubernetes environment, update `storageClassName` to a StorageClass available in that cluster.
+The PVC should show `Bound`.
 
 ## 5. Deploy the Inference Service
 
 ```bash
 kubectl apply -f kubernetes/inference-deployment.yaml
 kubectl apply -f kubernetes/inference-service.yaml
-```
-
-Check:
-
-```bash
-kubectl get deployment inference
-kubectl get pods -l app=inference
 ```
 
 ## 6. Deploy the Monitoring Service
@@ -124,14 +99,7 @@ kubectl apply -f kubernetes/monitoring-deployment.yaml
 kubectl apply -f kubernetes/monitoring-service.yaml
 ```
 
-Check:
-
-```bash
-kubectl get deployment monitoring
-kubectl get pods -l app=monitoring
-```
-
-## 7. Verify the Complete Deployment
+## 7. Check Everything
 
 ```bash
 kubectl get deployments
@@ -139,8 +107,6 @@ kubectl get pods
 kubectl get services
 kubectl get pvc
 ```
-
-The default YAML configuration starts one replica of each Deployment.
 
 ## 8. Open the Dashboard
 
@@ -150,101 +116,59 @@ Open:
 http://localhost:30081/
 ```
 
-The Monitoring Service is exposed with a NodePort on port `30081`.
+Enter customer information and click **Predict Churn**.
 
-## 9. Test a Prediction
+Use **Load Prediction History** to show saved predictions.
 
-Enter customer information in the dashboard and select **Predict Churn**.
-
-The request flow is:
-
-```text
-Browser
-  -> Monitoring Service
-  -> Inference Service
-  -> Monitoring Service
-  -> PostgreSQL
-  -> Browser
-```
-
-Use **Load Prediction History** to retrieve records stored in PostgreSQL.
-
-## 10. View Logs
-
-Monitoring logs:
+## 9. Check Logs
 
 ```bash
 kubectl logs deployment/monitoring --tail=50
-```
-
-Inference logs:
-
-```bash
 kubectl logs deployment/inference --tail=50
-```
-
-PostgreSQL logs:
-
-```bash
 kubectl logs deployment/postgres --tail=50
 ```
 
-For a deployment with multiple replicas, you can also list Pods and inspect one specific Pod:
-
-```bash
-kubectl get pods
-kubectl logs <pod-name>
-```
-
-## 11. Horizontal Scaling
-
-Scale the application services independently:
+## 10. Scale the Services
 
 ```bash
 kubectl scale deployment inference --replicas=3
 kubectl scale deployment monitoring --replicas=2
 ```
 
-Verify:
+Check:
 
 ```bash
 kubectl get deployments
 kubectl get pods
 ```
 
-PostgreSQL remains at one replica.
+PostgreSQL stays at one replica.
 
-## 12. Demonstrate Self-Healing
+## 11. Test Self-Healing
 
-List Inference Pods:
+First list the Inference Pods:
 
 ```bash
 kubectl get pods -l app=inference
 ```
 
-Delete one Inference Pod:
+Delete one Pod:
 
 ```bash
 kubectl delete pod <inference-pod-name>
 ```
 
-Then watch Kubernetes create a replacement:
+Check again:
 
 ```bash
-kubectl get pods -l app=inference -w
+kubectl get pods -l app=inference
 ```
 
-Press `Ctrl+C` to stop watching.
+Kubernetes should create a replacement Pod.
 
-## 13. Verify Database Persistence
+## 12. Test Database Persistence
 
-Create at least one prediction through the dashboard.
-
-Optional SQL check:
-
-```bash
-kubectl exec deployment/postgres -- psql -U <database-user> -d churndb -c "SELECT id, prediction, churn_probability, created_at FROM predictions ORDER BY id DESC LIMIT 5;"
-```
+Create at least one prediction in the dashboard.
 
 Delete the PostgreSQL Pod:
 
@@ -252,23 +176,27 @@ Delete the PostgreSQL Pod:
 kubectl delete pod -l app=postgres
 ```
 
-Wait for the replacement Pod:
+Wait for the new Pod:
 
 ```bash
 kubectl get pods -l app=postgres
 ```
 
-Reload the prediction history in the dashboard. Previously stored data should still be present because PostgreSQL uses the PVC.
+Open the dashboard again and load prediction history.
 
-## 14. Access FastAPI Documentation
+The old records should still be there because PostgreSQL uses the PVC.
 
-Monitoring API documentation is available through the external service:
+## 13. FastAPI Documentation
+
+Monitoring API:
 
 ```text
 http://localhost:30081/docs
 ```
 
-The Inference Service is intentionally internal. To inspect its FastAPI documentation locally:
+The Inference Service is internal.
+
+To open its API documentation:
 
 ```bash
 kubectl port-forward service/inference-service 8000:8000
@@ -280,30 +208,10 @@ Then open:
 http://localhost:8000/docs
 ```
 
-Stop port forwarding with `Ctrl+C`.
+Press `Ctrl+C` to stop port forwarding.
 
-## 15. Remove the Deployment
+## Note About Storage
 
-To remove the application resources:
+The included PVC uses the Docker Desktop `hostpath` StorageClass.
 
-```bash
-kubectl delete -f kubernetes/monitoring-service.yaml
-kubectl delete -f kubernetes/monitoring-deployment.yaml
-kubectl delete -f kubernetes/monitoring-configmap.yaml
-kubectl delete -f kubernetes/inference-service.yaml
-kubectl delete -f kubernetes/inference-deployment.yaml
-kubectl delete -f kubernetes/postgres-service.yaml
-kubectl delete -f kubernetes/postgres-deployment.yaml
-```
-
-Delete the PVC only if you intentionally want to remove the persistent database storage:
-
-```bash
-kubectl delete -f kubernetes/postgres-pvc.yaml
-```
-
-The database Secret can be removed separately:
-
-```bash
-kubectl delete secret postgres-secret
-```
+If you run this project on another Kubernetes cluster, you may need to change the StorageClass.
