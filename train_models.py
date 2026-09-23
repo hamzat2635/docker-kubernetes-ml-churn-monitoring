@@ -1,108 +1,59 @@
-# =========================================
-# TELCO CUSTOMER CHURN - MODEL TRAINING
-# =========================================
+# Telco Customer Churn - model training
 
-# Import pandas
-from sklearn.ensemble import RandomForestClassifier
+import joblib
 import pandas as pd
-from sklearn.model_selection import train_test_split
+
+from pathlib import Path
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-
-
 from sklearn.metrics import (
     accuracy_score,
-    confusion_matrix,
-    classification_report
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score
 )
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 # Load the dataset
 df = pd.read_csv("WA_Fn-UseC_-Telco-Customer-Churn.csv")
 
-
-# Check if the dataset loaded correctly
-print("Dataset loaded successfully")
-
-print("\nDataset shape:")
-print(df.shape)
-
-print("\nFirst 5 rows:")
-print(df.head())
-
-# Check TotalCharges data type
-print("\nTotalCharges data type before cleaning:")
-print(df["TotalCharges"].dtype)
-
-
-# Convert TotalCharges to numbers
+# TotalCharges contains some empty values, so convert it to numeric
 df["TotalCharges"] = pd.to_numeric(
     df["TotalCharges"],
     errors="coerce"
 )
 
-
-# Check missing values created after conversion
-print("\nMissing TotalCharges values:")
-print(df["TotalCharges"].isnull().sum())
-
-
-# Customers with tenure 0 have no previous TotalCharges
+# New customers with tenure 0 have no previous TotalCharges
 df.loc[
-    (df["TotalCharges"].isnull()) &
-    (df["tenure"] == 0),
+    (df["TotalCharges"].isnull()) & (df["tenure"] == 0),
     "TotalCharges"
 ] = 0
 
 
-# Check again
-print("\nMissing TotalCharges after fixing:")
-print(df["TotalCharges"].isnull().sum())
+# Features used by the final model
+features = [
+    "tenure",
+    "InternetService",
+    "Contract",
+    "MonthlyCharges",
+    "TotalCharges",
+    "TechSupport",
+    "OnlineSecurity",
+    "PaperlessBilling",
+    "PaymentMethod"
+]
 
-# =========================
-# Prepare data for training
-# =========================
-
-# X contains the information we use to make predictions
-# We remove customerID because it is only an ID
-# We also remove Churn because that is what we want to predict
-
-X = df.drop(
-    columns=[
-        "customerID",
-        "Churn"
-    ]
-)
+X = df[features]
+y = df["Churn"].map({"No": 0, "Yes": 1})
 
 
-# y is the value we want to predict
-# Convert No and Yes into 0 and 1
-
-y = df["Churn"].map(
-    {
-        "No": 0,
-        "Yes": 1
-    }
-)
-
-
-# Check the result
-
-print("\nFeatures shape:")
-print(X.shape)
-
-print("\nTarget shape:")
-print(y.shape)
-
-print("\nChurn values:")
-print(y.value_counts())
-
-# =========================
-# Split data into train and test
-# =========================
-
+# Split the data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
@@ -112,189 +63,130 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 
-# Check the split
+numeric_features = [
+    "tenure",
+    "MonthlyCharges",
+    "TotalCharges"
+]
 
-print("\nTraining features:")
-print(X_train.shape)
-
-print("\nTesting features:")
-print(X_test.shape)
-
-print("\nTraining target:")
-print(y_train.shape)
-
-print("\nTesting target:")
-print(y_test.shape)
-
-# =========================
-# Find categorical and numerical columns
-# =========================
-
-categorical_columns = X.select_dtypes(
-    include=["object", "string"]
-).columns
-
-numeric_columns = X.select_dtypes(
-    include=["number"]
-).columns
+categorical_features = [
+    "InternetService",
+    "Contract",
+    "TechSupport",
+    "OnlineSecurity",
+    "PaperlessBilling",
+    "PaymentMethod"
+]
 
 
-print("\nCategorical columns:")
-print(categorical_columns)
+# Fill missing numeric values and scale them
+numeric_steps = Pipeline(
+    steps=[
+        ("missing", SimpleImputer(strategy="median")),
+        ("scale", StandardScaler())
+    ]
+)
 
-print("\nNumerical columns:")
-print(numeric_columns)
-
-# =========================
-# Create the preprocessor
-# =========================
+# Fill missing text values and convert categories to numbers
+categorical_steps = Pipeline(
+    steps=[
+        ("missing", SimpleImputer(strategy="most_frequent")),
+        ("encode", OneHotEncoder(handle_unknown="ignore"))
+    ]
+)
 
 preprocessor = ColumnTransformer(
     transformers=[
-        
-        # Convert text columns into numbers
-        (
-            "cat",
-            OneHotEncoder(handle_unknown="ignore"),
-            categorical_columns
-        ),
-
-        # Scale numerical columns
-        (
-            "num",
-            StandardScaler(),
-            numeric_columns
-        )
+        ("num", numeric_steps, numeric_features),
+        ("cat", categorical_steps, categorical_features)
     ]
 )
 
 
-print("\nPreprocessor created successfully")
-
-# =========================
-# Logistic Regression Model
-# =========================
-
+# Logistic Regression
 logistic_model = Pipeline(
-    steps=[
-        ("preprocessor", preprocessor),
-        ("model", LogisticRegression(max_iter=1000))
-    ]
-)
-
-
-# Train the model
-logistic_model.fit(
-    X_train,
-    y_train
-)
-
-print("\nLogistic Regression training complete")
-
-
-# Make predictions
-logistic_predictions = logistic_model.predict(
-    X_test
-)
-
-
-# Calculate accuracy
-logistic_accuracy = accuracy_score(
-    y_test,
-    logistic_predictions
-)
-
-
-print("\nLogistic Regression Accuracy:")
-print(logistic_accuracy * 100)
-
-
-# Confusion matrix
-print("\nConfusion Matrix:")
-print(
-    confusion_matrix(
-        y_test,
-        logistic_predictions
-    )
-)
-
-
-# Classification report
-print("\nClassification Report:")
-print(
-    classification_report(
-        y_test,
-        logistic_predictions,
-        target_names=[
-            "Stay",
-            "Churn"
-        ]
-    )
-)
-
-# =========================
-# Random Forest Model
-# =========================
-
-random_forest_model = Pipeline(
     steps=[
         ("preprocessor", preprocessor),
         (
             "model",
-            RandomForestClassifier(
-                n_estimators=100,
+            LogisticRegression(
+                max_iter=1000,
+                class_weight="balanced",
                 random_state=42
             )
         )
     ]
 )
 
+logistic_model.fit(X_train, y_train)
 
-# Train the model
-random_forest_model.fit(
-    X_train,
-    y_train
+logistic_predictions = logistic_model.predict(X_test)
+logistic_probabilities = logistic_model.predict_proba(X_test)[:, 1]
+
+logistic_metrics = {
+    "accuracy": accuracy_score(y_test, logistic_predictions),
+    "precision": precision_score(y_test, logistic_predictions),
+    "recall": recall_score(y_test, logistic_predictions),
+    "f1": f1_score(y_test, logistic_predictions),
+    "roc_auc": roc_auc_score(y_test, logistic_probabilities)
+}
+
+print("\nLogistic Regression")
+for metric, value in logistic_metrics.items():
+    print(metric, round(value, 4))
+
+
+# Random Forest
+random_forest_model = Pipeline(
+    steps=[
+        ("preprocessor", preprocessor),
+        (
+            "model",
+            RandomForestClassifier(
+                n_estimators=300,
+                class_weight="balanced",
+                random_state=42
+            )
+        )
+    ]
 )
 
-print("\nRandom Forest training complete")
+random_forest_model.fit(X_train, y_train)
+
+forest_predictions = random_forest_model.predict(X_test)
+forest_probabilities = random_forest_model.predict_proba(X_test)[:, 1]
+
+forest_metrics = {
+    "accuracy": accuracy_score(y_test, forest_predictions),
+    "precision": precision_score(y_test, forest_predictions),
+    "recall": recall_score(y_test, forest_predictions),
+    "f1": f1_score(y_test, forest_predictions),
+    "roc_auc": roc_auc_score(y_test, forest_probabilities)
+}
+
+print("\nRandom Forest")
+for metric, value in forest_metrics.items():
+    print(metric, round(value, 4))
 
 
-# Make predictions
-random_forest_predictions = random_forest_model.predict(
-    X_test
+# Logistic Regression is used in the application because it gave
+# better recall, F1 score and ROC AUC in this experiment.
+model_data = {
+    "pipeline": logistic_model,
+    "features": features,
+    "model_name": "Logistic Regression",
+    "model_version": "1.0",
+    "metrics": logistic_metrics
+}
+
+# Save one copy for training results and one copy for the inference service
+Path("model").mkdir(exist_ok=True)
+Path("inference-service/model").mkdir(parents=True, exist_ok=True)
+
+joblib.dump(model_data, "model/logistic_regression.joblib")
+joblib.dump(
+    model_data,
+    "inference-service/model/logistic_regression.joblib"
 )
 
-
-# Calculate accuracy
-random_forest_accuracy = accuracy_score(
-    y_test,
-    random_forest_predictions
-)
-
-
-print("\nRandom Forest Accuracy:")
-print(random_forest_accuracy * 100)
-
-
-# Confusion matrix
-print("\nRandom Forest Confusion Matrix:")
-print(
-    confusion_matrix(
-        y_test,
-        random_forest_predictions
-    )
-)
-
-
-# Classification report
-print("\nRandom Forest Classification Report:")
-print(
-    classification_report(
-        y_test,
-        random_forest_predictions,
-        target_names=[
-            "Stay",
-            "Churn"
-        ]
-    )
-)
+print("\nSaved Logistic Regression model.")
