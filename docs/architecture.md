@@ -1,21 +1,20 @@
 # Software Architecture
 
-## 1. Software Description
+## Software Description
 
-This project is a cloud-native customer churn prediction and monitoring application.
+This project predicts if a telecom customer is likely to churn.
 
-A user enters telecom customer information in a web dashboard. The Monitoring Service receives the request and programmatically calls the Inference Service through a REST API. The Inference Service loads a trained Logistic Regression pipeline and returns a churn prediction together with a churn probability.
+The user enters customer information in a web dashboard. The Monitoring Service receives the data and sends it to the Inference Service with a REST request. The Inference Service runs the trained Logistic Regression model and returns a prediction and probability.
 
-The Monitoring Service then stores the customer input, prediction, probability, and timestamp in PostgreSQL. Previous predictions can be loaded from the dashboard.
+The Monitoring Service saves the result in PostgreSQL. The user can also load old predictions from the dashboard.
 
 The application is containerized with Docker and deployed with Kubernetes.
 
-## 2. Architecture Overview
+## Architecture Overview
 
 ```text
 Browser
    |
-   | HTTP
    v
 NodePort :30081
    |
@@ -36,24 +35,23 @@ Monitoring Service
                     PersistentVolumeClaim
 ```
 
-The application contains two application microservice types and one separate database component:
+The application has three main parts:
 
 1. Monitoring Service
 2. Inference Service
 3. PostgreSQL
 
-## 3. Monitoring Microservice
+## Monitoring Service
 
-The Monitoring Service is the user-facing service and the main coordinator of the application.
+The Monitoring Service is the service used by the browser.
 
-Responsibilities:
+Its jobs are:
 
-- Serves the HTML dashboard.
-- Exposes REST endpoints for analysis and prediction history.
-- Accepts customer input from the browser.
-- Programmatically calls the Inference Service.
-- Stores prediction results in PostgreSQL.
-- Reads prediction history from PostgreSQL.
+- show the dashboard
+- receive customer input
+- call the Inference Service
+- save prediction results
+- return prediction history
 
 REST endpoints:
 
@@ -64,19 +62,19 @@ POST /analyze
 GET  /predictions
 ```
 
-The Monitoring Service does not run the machine learning model itself. This keeps the web/database responsibilities separate from prediction logic.
+The Monitoring Service does not run the machine learning model itself.
 
-## 4. Inference Microservice
+## Inference Service
 
-The Inference Service is responsible only for machine learning inference.
+The Inference Service only handles machine learning prediction.
 
-Responsibilities:
+Its jobs are:
 
-- Loads the trained Logistic Regression pipeline.
-- Validates incoming customer data through Pydantic.
-- Converts the request into a pandas DataFrame.
-- Runs model prediction and probability estimation.
-- Returns the result as JSON.
+- load the saved Logistic Regression model
+- receive customer data
+- run the prediction
+- return Churn or Stay
+- return churn probability
 
 REST endpoints:
 
@@ -85,7 +83,7 @@ GET  /health
 POST /predict
 ```
 
-Example response:
+Example:
 
 ```json
 {
@@ -94,30 +92,26 @@ Example response:
 }
 ```
 
-The Inference Service has no database responsibility.
+## PostgreSQL
 
-## 5. PostgreSQL Database
-
-PostgreSQL runs as a separate Kubernetes Deployment with one replica.
+PostgreSQL runs separately from the two application services.
 
 It stores:
 
-- Customer input features
-- Prediction result
-- Churn probability
-- Creation timestamp
+- customer input
+- prediction
+- churn probability
+- timestamp
 
-The Monitoring Service connects to PostgreSQL through the internal Kubernetes Service name:
+The Monitoring Service connects to PostgreSQL through:
 
 ```text
 postgres-service
 ```
 
-The database uses a PersistentVolumeClaim so that its data is not tied to the lifetime of a specific PostgreSQL Pod.
+## REST Communication
 
-## 6. REST Communication
-
-The project demonstrates both providing and consuming REST APIs.
+The project shows both creating and using REST APIs.
 
 The browser sends customer data to:
 
@@ -125,11 +119,13 @@ The browser sends customer data to:
 POST /analyze
 ```
 
-The Monitoring Service then makes a programmatic HTTP request to the Inference Service:
+The Monitoring Service then calls:
 
 ```text
 POST http://inference-service:8000/predict
 ```
+
+The Inference Service returns the result as JSON.
 
 The flow is:
 
@@ -139,11 +135,9 @@ Browser
    v
 Monitoring Service
    |
-   | POST /predict
    v
 Inference Service
    |
-   | JSON prediction
    v
 Monitoring Service
    |
@@ -153,45 +147,45 @@ Monitoring Service
 Browser
 ```
 
-This demonstrates the ability to program a REST API and programmatically consume a REST API.
+## Kubernetes Service Discovery
 
-## 7. Kubernetes Service Discovery
+Kubernetes Services give stable names to the application.
 
-Kubernetes Services provide stable names for communication between Pods.
-
-Internal services:
+The Monitoring Service uses:
 
 ```text
 inference-service
 postgres-service
 ```
 
-Pods can be deleted and recreated with different IP addresses without requiring application configuration changes. The Monitoring Service continues to use the stable Kubernetes Service names.
+This means the application does not need to know the IP address of each Pod.
 
-The Service for the Inference Deployment also distributes requests across available Inference Pods.
+If a Pod is replaced, the Service name stays the same.
 
-## 8. External Access
+## External Access
 
-The Monitoring Service is exposed outside Kubernetes using a NodePort:
+The Monitoring Service uses a NodePort.
+
+The dashboard can be opened at:
 
 ```text
 http://localhost:30081/
 ```
 
-The Inference Service and PostgreSQL use internal ClusterIP Services and are not intentionally exposed outside the cluster.
+The Inference Service and PostgreSQL stay inside Kubernetes.
 
-## 9. Horizontal Scaling
+## Horizontal Scaling
 
-The application microservices are separate Kubernetes Deployments and can be scaled independently.
+The Monitoring Service and Inference Service are separate Deployments.
 
-Example:
+They can be scaled separately:
 
 ```bash
 kubectl scale deployment inference --replicas=3
 kubectl scale deployment monitoring --replicas=2
 ```
 
-During testing, the application was run with:
+I tested:
 
 ```text
 Inference:   3 replicas
@@ -199,11 +193,9 @@ Monitoring:  2 replicas
 PostgreSQL:  1 replica
 ```
 
-The YAML files use one replica by default, while scaling can be changed at runtime with Kubernetes.
+The application is small, so this amount of scaling is not needed for real traffic. It is used to show how Kubernetes scaling works.
 
-The current student application does not generate enough traffic to require multiple replicas in practice. The scaling demonstration represents how the design could behave under a larger workload, for example when many customer predictions are requested at the same time.
-
-## 10. Persistent Storage
+## Persistent Storage
 
 PostgreSQL uses:
 
@@ -217,26 +209,21 @@ The PVC is mounted at:
 /var/lib/postgresql/data
 ```
 
-Persistence was tested by:
+I tested persistence by saving predictions, deleting the PostgreSQL Pod and checking the data again after Kubernetes created a new Pod.
 
-1. Creating prediction records.
-2. Deleting the PostgreSQL Pod.
-3. Allowing Kubernetes to create a replacement Pod.
-4. Confirming that the previously stored records were still available.
+The data was still available.
 
-This demonstrates that database data survives ordinary Pod replacement.
+## Self-Healing
 
-## 11. Self-Healing and Health Checks
+The Monitoring and Inference Services have health endpoints.
 
-The Monitoring and Inference Deployments use Kubernetes readiness and liveness probes against their `/health` endpoints.
+Their Deployments use readiness and liveness probes.
 
-Kubernetes self-healing was tested by deleting an Inference Pod. Kubernetes automatically created a replacement Pod because the Deployment still required the configured number of replicas.
+I also tested self-healing by deleting an Inference Pod. Kubernetes automatically created another Pod.
 
-This separates desired application state from the lifetime of individual containers.
+## Configuration
 
-## 12. Configuration Management
-
-The Monitoring Service receives non-sensitive configuration from a Kubernetes ConfigMap:
+The Monitoring Service gets normal configuration from a ConfigMap:
 
 ```text
 INFERENCE_SERVICE_URL
@@ -245,33 +232,32 @@ DB_PORT
 DB_NAME
 ```
 
-Database credentials are provided through a Kubernetes Secret.
+Database username and password come from a Kubernetes Secret.
 
-The real `kubernetes/postgres-secret.yaml` file is excluded from Git. The repository contains `postgres-secret.example.yaml` as a safe template.
+The real Secret file is not stored in Git.
 
-## 13. Component-to-Microservice Mapping
+## Component Mapping
 
-| Software component | Kubernetes/runtime component | Responsibility |
+| Component | Runs as | Job |
 |---|---|---|
-| Web dashboard | Monitoring Service | Browser-based user interface |
-| Monitoring REST API | Monitoring Service | Accept requests and coordinate the application |
-| Prediction history | Monitoring Service | Read and write prediction records |
-| ML preprocessing | Inference Service | Transform input for the trained pipeline |
-| Churn prediction | Inference Service | Run Logistic Regression inference |
-| Data storage | PostgreSQL | Store inputs, predictions, probabilities, and timestamps |
-| Persistent storage | PersistentVolumeClaim | Preserve PostgreSQL data across Pod replacement |
-| Internal routing | Kubernetes Services | Stable networking and service discovery |
-| External access | NodePort Service | Expose the dashboard outside the cluster |
+| Dashboard | Monitoring Service | User interface |
+| Monitoring API | Monitoring Service | Receives requests and connects other parts |
+| ML prediction | Inference Service | Runs the model |
+| Prediction history | Monitoring Service | Reads and writes database records |
+| Database | PostgreSQL | Stores predictions |
+| Persistent data | PVC | Keeps database files |
+| Internal networking | Kubernetes Services | Connects Pods |
+| External access | NodePort | Opens the dashboard in a browser |
 
-## 14. Architecture Principles and Cloud Patterns
+## Architecture Ideas Used
 
-The project uses several cloud-native principles:
+The project uses some simple cloud architecture ideas:
 
-- **Separation of concerns:** monitoring, inference, and storage have different responsibilities.
-- **Independent scalability:** Monitoring and Inference Deployments can use different replica counts.
-- **Service discovery:** Kubernetes Services provide stable internal endpoints.
-- **Stateless application services:** application state is not stored inside Monitoring or Inference Pods.
-- **Externalized configuration:** Kubernetes ConfigMaps and Secrets provide runtime configuration.
-- **Health monitoring and self-healing:** probes and Deployments allow Kubernetes to detect and replace unhealthy application Pods.
-- **Persistent state separation:** database data is stored through a PVC rather than inside the PostgreSQL container filesystem.
-- **Container portability:** custom services are packaged as Docker images and pulled by Kubernetes from Docker Hub.
+- Each service has its own job.
+- Monitoring and Inference can scale separately.
+- Kubernetes Services give stable internal names.
+- Application Pods do not store important data.
+- Configuration is passed with ConfigMaps and Secrets.
+- Kubernetes can replace failed Pods.
+- PostgreSQL data is stored outside the Pod with a PVC.
+- Docker images make the application easier to run in the same way in different environments.
